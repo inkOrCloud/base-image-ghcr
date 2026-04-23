@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       LLAMA_CPP_VERSION:
-        description: "Release tag (e.g. b5460)"
-        required: true
+        description: "Release tag (e.g. b8893)"
+        required: false
+        default: "b8893"
       GHCR_NAMESPACE:
         description: "GitHub org/user namespace"
         required: false
