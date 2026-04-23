@@ -164,6 +164,7 @@ RUN \
         dos2unix \
         rsync \
         rclone \
+        fuse3 \
         zip \
         unzip \
         xz-utils \
@@ -379,6 +380,7 @@ RUN \
     uv pip install \
         wheel \
         huggingface-hub[cli] \
+        hf_transfer \
         ipykernel \
         ipywidgets && \
     python -m ipykernel install \
@@ -399,6 +401,7 @@ RUN \
     rm -rf /var/lib/apt/lists/*
 
 ENV PATH=/opt/instance-tools/bin:${PATH}
+ENV HF_HUB_ENABLE_HF_TRANSFER=1
 
 # Defend against environment clashes when syncing to volume
 RUN \

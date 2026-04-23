@@ -464,6 +464,20 @@ The logging utilities in `/opt/supervisor-scripts/utils/` handle:
 |----------|-------------|
 | `TENSORBOARD_LOG_DIR` | Tensorboard log directory (default: `/workspace`) |
 
+### Google Drive Mount
+
+The base image can mount Google Drive via rclone during boot when enabled.
+
+| Variable | Description |
+|----------|-------------|
+| `GDRIVE_MOUNT_ENABLED` | Set to `true` to enable the mount (default: `false`) |
+| `GDRIVE_MOUNT_PATH` | Mount point for the drive (default: `/workspace`) |
+| `GDRIVE_REMOTE_PATH` | Path within the remote drive (default: root) |
+| `RCLONE_CONFIG_CONTENT` | Base64-encoded `rclone.conf` content containing a `[gdrive]` section |
+| `GDRIVE_SA_JSON` | Google service account JSON content for the `gdrive` remote |
+
+If enabled, the mount is created during boot by `ROOT/etc/vast_boot.d/38-gdrive-mount.sh`.
+
 ### Logging
 
 | Variable | Description |
