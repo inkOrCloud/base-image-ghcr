@@ -184,6 +184,8 @@ jobs:
           DEFAULT_PYTHON: ${{ matrix.default_python }}
           BUILD_DATE: ${{ needs.generate-matrix.outputs.build-date }}
         run: |
+          GHCR_NAMESPACE="$(echo "$GHCR_NAMESPACE" | tr '[:upper:]' '[:lower:]')"
+          GHCR_REPO="$(echo "$GHCR_REPO" | tr '[:upper:]' '[:lower:]')"
           PYTHON_VERSIONS=("3.10" "3.11" "3.12" "3.13" "3.14")
           mkdir -p built-tags
 
@@ -248,10 +250,11 @@ jobs:
           TAG_TEMPLATE: ${{ matrix.tag_template }}
           BUILD_DATE: ${{ needs.generate-matrix.outputs.build-date }}
         run: |
+          GHCR_NAMESPACE="$(echo "$GHCR_NAMESPACE" | tr '[:upper:]' '[:lower:]')"
+          GHCR_REPO="$(echo "$GHCR_REPO" | tr '[:upper:]' '[:lower:]')"
           if [ -d all-tags ] && [ "$(ls -A all-tags 2>/dev/null)" ]; then
             TAGS=$(cat all-tags/*.txt | grep "${TAG_TEMPLATE}" || true)
             echo "$TAGS"
           fi
 
-          # Placeholder manifest step for GHCR-only publishing
           echo "GHCR publish completed for ${TAG_TEMPLATE}"

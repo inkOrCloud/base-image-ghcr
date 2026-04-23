@@ -81,8 +81,10 @@ jobs:
           if [[ -z "$GHCR_NAMESPACE" ]]; then
             GHCR_NAMESPACE="${{ github.repository_owner }}"
           fi
+          GHCR_NAMESPACE="$(echo "$GHCR_NAMESPACE" | tr '[:upper:]' '[:lower:]')"
 
           GHCR_REPO="${{ inputs.GHCR_REPO }}"
+          GHCR_REPO="$(echo "$GHCR_REPO" | tr '[:upper:]' '[:lower:]')"
           FULL_IMAGE="ghcr.io/${GHCR_NAMESPACE}/${GHCR_REPO}:${IMAGE_TAG_BASE}"
           MATRIX_ID=$(echo "$BASE_IMAGE" | md5sum | cut -c1-8)
 
