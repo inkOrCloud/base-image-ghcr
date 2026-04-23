@@ -6,10 +6,6 @@ on:
       LLAMA_CPP_VERSION:
         description: "Release tag (e.g. b5460)"
         required: true
-      CUDA_VERSION:
-        description: "CUDA version for binary package"
-        required: false
-        default: "12.8"
       GHCR_NAMESPACE:
         description: "GitHub org/user namespace"
         required: false
@@ -18,6 +14,10 @@ on:
         description: "Container repository name"
         required: false
         default: "llama-cpp"
+      BASE_IMAGE:
+        description: "Base image tag"
+        required: false
+        default: "vastai/base-image:cuda-12.9-mini-py312-2026-04-15"
       MULTI_ARCH:
         description: "multi-arch build"
         required: false
@@ -34,11 +34,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-    strategy:
-      fail-fast: false
-      matrix:
-        base_image:
-          - vastai/base-image:cuda-12.9-mini-py312-2026-04-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -62,12 +57,12 @@ jobs:
       - name: Derive image tag
         id: meta
         run: |
-          BASE_IMAGE="${{ matrix.base_image }}"
+          BASE_IMAGE="${{ inputs.BASE_IMAGE }}"
           TAG="${BASE_IMAGE##*:}"
 
           CUDA_VERSION=$(echo "$TAG" | sed -n 's/.*cuda-\([0-9.]*\).*/\1/p')
           if [[ -z "$CUDA_VERSION" ]]; then
-            echo "::error::Failed to parse base image: $BASE_IMAGE"
+            echo "::error::Failed to parse CUDA version from base image: $BASE_IMAGE"
             exit 1
           fi
 
@@ -86,11 +81,9 @@ jobs:
           GHCR_REPO="${{ inputs.GHCR_REPO }}"
           GHCR_REPO="$(echo "$GHCR_REPO" | tr '[:upper:]' '[:lower:]')"
           FULL_IMAGE="ghcr.io/${GHCR_NAMESPACE}/${GHCR_REPO}:${IMAGE_TAG_BASE}"
-          MATRIX_ID=$(echo "$BASE_IMAGE" | md5sum | cut -c1-8)
 
           echo "FULL_IMAGE=$FULL_IMAGE" >> $GITHUB_ENV
-          echo "MATRIX_ID=$MATRIX_ID" >> $GITHUB_ENV
-          echo "CUDA_BIN_VERSION=${{ inputs.CUDA_VERSION }}" >> $GITHUB_ENV
+          echo "CUDA_BIN_VERSION=$CUDA_VERSION" >> $GITHUB_ENV
 
       - name: Build and push
         run: |
@@ -100,20 +93,8 @@ jobs:
           cd derivatives/llama-cpp
           docker buildx build \
             --platform "$platforms" \
-            --build-arg BASE_IMAGE=${{ matrix.base_image }} \
+            --build-arg BASE_IMAGE=${{ inputs.BASE_IMAGE }} \
             --build-arg LLAMA_CPP_VERSION=${{ inputs.LLAMA_CPP_VERSION }} \
             --build-arg CUDA_VERSION=${{ env.CUDA_BIN_VERSION }} \
             -t ${{ env.FULL_IMAGE }} \
             . --push
-
-      - name: Record built tag
-        run: |
-          mkdir -p built-tags
-          echo "${{ env.FULL_IMAGE }}" > built-tags/tag-${{ env.MATRIX_ID }}.txt
-
-      - name: Upload built tag
-        uses: actions/upload-artifact@v4
-        with:
-          name: built-tag-${{ env.MATRIX_ID }}
-          path: built-tags/
-          retention-days: 1
