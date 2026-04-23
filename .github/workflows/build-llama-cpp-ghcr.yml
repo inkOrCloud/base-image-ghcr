@@ -1,0 +1,117 @@
+name: Build Llama.cpp Image to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      LLAMA_CPP_VERSION:
+        description: "Release tag (e.g. b5460)"
+        required: true
+      CUDA_VERSION:
+        description: "CUDA version for binary package"
+        required: false
+        default: "12.8"
+      GHCR_NAMESPACE:
+        description: "GitHub org/user namespace"
+        required: false
+        default: ""
+      GHCR_REPO:
+        description: "Container repository name"
+        required: false
+        default: "llama-cpp"
+      MULTI_ARCH:
+        description: "multi-arch build"
+        required: false
+        default: false
+        type: boolean
+      CUSTOM_IMAGE_TAG:
+        description: "Custom tag"
+        required: false
+        default: ""
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        base_image:
+          - vastai/base-image:cuda-12.9-mini-py312-2026-04-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Maximize build space
+        uses: ./.github/actions/maximize-build-space
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image tag
+        id: meta
+        run: |
+          BASE_IMAGE="${{ matrix.base_image }}"
+          TAG="${BASE_IMAGE##*:}"
+
+          CUDA_VERSION=$(echo "$TAG" | sed -n 's/.*cuda-\([0-9.]*\).*/\1/p')
+          if [[ -z "$CUDA_VERSION" ]]; then
+            echo "::error::Failed to parse base image: $BASE_IMAGE"
+            exit 1
+          fi
+
+          LLAMA_CPP_VERSION="${{ inputs.LLAMA_CPP_VERSION }}"
+          IMAGE_TAG_BASE="${{ inputs.CUSTOM_IMAGE_TAG }}"
+          if [[ -z "$IMAGE_TAG_BASE" ]]; then
+            IMAGE_TAG_BASE="${LLAMA_CPP_VERSION}-cuda-${CUDA_VERSION}"
+          fi
+
+          GHCR_NAMESPACE="${{ inputs.GHCR_NAMESPACE }}"
+          if [[ -z "$GHCR_NAMESPACE" ]]; then
+            GHCR_NAMESPACE="${{ github.repository_owner }}"
+          fi
+
+          GHCR_REPO="${{ inputs.GHCR_REPO }}"
+          FULL_IMAGE="ghcr.io/${GHCR_NAMESPACE}/${GHCR_REPO}:${IMAGE_TAG_BASE}"
+          MATRIX_ID=$(echo "$BASE_IMAGE" | md5sum | cut -c1-8)
+
+          echo "FULL_IMAGE=$FULL_IMAGE" >> $GITHUB_ENV
+          echo "MATRIX_ID=$MATRIX_ID" >> $GITHUB_ENV
+          echo "CUDA_BIN_VERSION=${{ inputs.CUDA_VERSION }}" >> $GITHUB_ENV
+
+      - name: Build and push
+        run: |
+          platforms="linux/amd64"
+          [[ "${{ inputs.MULTI_ARCH }}" == "true" ]] && platforms+=",linux/arm64"
+
+          cd derivatives/llama-cpp
+          docker buildx build \
+            --platform "$platforms" \
+            --build-arg BASE_IMAGE=${{ matrix.base_image }} \
+            --build-arg LLAMA_CPP_VERSION=${{ inputs.LLAMA_CPP_VERSION }} \
+            --build-arg CUDA_VERSION=${{ env.CUDA_BIN_VERSION }} \
+            -t ${{ env.FULL_IMAGE }} \
+            . --push
+
+      - name: Record built tag
+        run: |
+          mkdir -p built-tags
+          echo "${{ env.FULL_IMAGE }}" > built-tags/tag-${{ env.MATRIX_ID }}.txt
+
+      - name: Upload built tag
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-tag-${{ env.MATRIX_ID }}
+          path: built-tags/
+          retention-days: 1
