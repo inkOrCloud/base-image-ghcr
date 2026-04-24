@@ -20,6 +20,7 @@ app = FastAPI()
 
 CLOUDFLARED_BIN = "/opt/portal-aio/tunnel_manager/cloudflared"
 CF_TUNNEL_TOKEN = os.environ.get('CF_TUNNEL_TOKEN')
+TUNNEL_URLS_FILE = "/tmp/portal-tunnel-urls.json"
 cloudflared_account_process: Optional[asyncio.subprocess.Process] = None
 
 def get_scheme():
@@ -207,6 +208,25 @@ async def monitor_processes():
                 del quick_tunnels[key]
         await asyncio.sleep(10)  # Check every 10 seconds
 
+def _write_tunnel_urls_file():
+    """Write current quick tunnel URLs to a well-known file so users
+    on instances without a public IP can retrieve them (e.g. via
+    'cat /tmp/portal-tunnel-urls.json' or Vast.ai exec)."""
+    tunnels = [
+        {"target_url": target_url, "tunnel_url": tunnel.tunnel_url}
+        for target_url, tunnel in quick_tunnels.items()
+        if tunnel.tunnel_url
+    ]
+    try:
+        with open(TUNNEL_URLS_FILE, "w") as f:
+            json.dump({
+                "quick_tunnels": tunnels,
+                "updated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            }, f, indent=2)
+    except Exception as e:
+        print(f"Failed to write tunnel URLs to {TUNNEL_URLS_FILE}: {e}")
+
+
 class CloudflareDaemon:
     def __init__(self, token: str):
         self.token = token
@@ -298,6 +318,7 @@ async def get_or_create_quick_tunnel(target_url: str) -> QuickTunnel:
     
     tunnel = await create_quick_tunnel(target_url)
     quick_tunnels[target_url] = tunnel
+    _write_tunnel_urls_file()
     return tunnel
 
 async def get_existing_quick_tunnel(target_url: str) -> QuickTunnel:
@@ -420,6 +441,7 @@ async def stop_quick_tunnel(target_url: str):
     await tunnel.stop()
 
     del quick_tunnels[target_url]
+    _write_tunnel_urls_file()
     return {"message": "Quick tunnel stopped successfully"}
 
 @app.post("/refresh-quick-tunnel/{target_url:path}")
